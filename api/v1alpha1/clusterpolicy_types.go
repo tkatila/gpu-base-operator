@@ -58,6 +58,10 @@ type ClusterPolicySpec struct {
 	// +optional
 	XpuManagerSpec XpuManagerSpec `json:"xpu"`
 
+	// DriverXeSpec configures out-of-tree Xe KMD deployment via the Kernel Module Management (KMM) operator.
+	// +optional
+	DriverXeSpec *DriverXeSpec `json:"driverXe,omitempty"`
+
 	// Pull secret is shared with all the deployments.
 	// +optional
 	PullSecret *v1.LocalObjectReference `json:"pullSecret,omitempty"`
@@ -147,11 +151,104 @@ type XpuManagerSpec struct {
 	MonitoringResource string `json:"monitoringResource,omitempty"`
 }
 
+// DriverXeSpec configures out-of-tree Xe KMD deployment via the Kernel Module Management (KMM) operator.
+// Nodes targeted by the OoT KMD are determined by the nodeSelector at the root of the ClusterPolicy.
+type DriverXeSpec struct {
+	// Enable creates the KMM Module CR and the accompanying resources to build the out-of-tree Xe KMD.
+	// Requires KMM operator to be pre-installed in the cluster.
+	Enable bool `json:"enable,omitempty"`
+
+	// ImageRepoSecret is the name of the Secret used to pull/push module images.
+	// Needed when working with private registries. Not necessary if deployment in OCP
+	// and using ImageStream for module images.
+	// +optional
+	ImageRepoSecret *v1.LocalObjectReference `json:"imageRepoSecret,omitempty"`
+
+	// SkipTLSVerify disables TLS certificate verification for the image registry.
+	// Typically required for self-signed registries.
+	SkipTLSVerify bool `json:"skipTLSVerify,omitempty"`
+
+	// ContainerImageBase specifies where the image is or will be located.
+	// If the image does not exist, the operator will attempt to build it and
+	// push it to the registry specified by ContainerImageBase.
+	// Operator adds a tag to differentiate between OS/kernel targets and Xe KMD versions.
+	ContainerImageBase string `json:"containerImageBase,omitempty"`
+
+	// NodeSelector defines which nodes the out-of-tree Xe KMD will be deployed to.
+	// If clusterpolicy uses useNFDLabeling, operator will deploy a rule that labels nodes and
+	// updates the nodeSelector accordingly.
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// KernelMappings defines one entry per OS/kernel target.
+	// If empty, operator tries to detect the OS and kernel from the nodes via NFD.
+	// +optional
+	KernelMappings []XeKernelMappingSpec `json:"kernelMappings,omitempty"`
+}
+
+// XeOSTarget enumerates the supported OS targets for the out-of-tree Xe KMD.
+// +kubebuilder:validation:Enum=ubuntu24.04;ubuntu26.04;rhel9.8;rhel10.1;rhel10.2
+type XeOSTarget string
+
+const (
+	XeOSUbuntu2404 XeOSTarget = "ubuntu24.04"
+	XeOSUbuntu2604 XeOSTarget = "ubuntu26.04"
+	XeOSRHEL9_8    XeOSTarget = "rhel9.8"
+	XeOSRHEL10_1   XeOSTarget = "rhel10.1"
+	XeOSRHEL10_2   XeOSTarget = "rhel10.2"
+)
+
+// XeKernelMappingSpec defines the out-of-tree Xe KMD configuration for one OS/kernel target.
+type XeKernelMappingSpec struct {
+	// OSTarget identifies the operating system this mapping applies to.
+	// The operator derives defaults for KernelRegexp, ContainerImage,
+	// module loading order, and build toolchain from this value.
+	OSTarget XeOSTarget `json:"osTarget"`
+
+	// Build describes how to build the module image at cluster time via KMM.
+	// Only needed to pin a specific xe backport version, change kernel pattern etc.
+	// +optional
+	Build *XeKMDBuildSpec `json:"build,omitempty"`
+}
+
+// XeKMDBuildSpec defines parameters for building the out-of-tree Xe KMD image.
+// Variables inside the spec are optionals meaning the operator will auto-fill them
+// based on the OSTarget if not set.
+type XeKMDBuildSpec struct {
+	// KernelRegexp defines the kernel pattern targeted by this spec.
+	// Example: '6\.8\.0-[0-9]+-generic' for Ubuntu 24.04.
+	// +optional
+	KernelRegexp string `json:"kernelRegexp,omitempty"`
+
+	// InTreeModulesToRemove overrides the default list of in-tree modules that
+	// must be unloaded before loading the OOT module.
+	// +optional
+	InTreeModulesToRemove []string `json:"inTreeModulesToRemove,omitempty"`
+
+	// XeTag is the xekmd-backports release tag to fetch and build from.
+	// Example: "xebr_v6.17.13.48_260409.3"
+	XeTag string `json:"xeTag"`
+
+	// XeSHA is the expected SHA256 checksum of the source tarball for XeTag.
+	XeSHA string `json:"xeSHA"`
+
+	// FirmwareFiles is an array of firmware filenames to embed.
+	// Example: [bmg_guc_70.bin, bmg_huc.bin, fan_control_8086_e20b_8086_1100.bin]
+	// +optional
+	FirmwareFiles []string `json:"firmwareFiles,omitempty"`
+
+	// ExtraModules is an array of additional in-tree .ko files
+	// to copy into the module image alongside the OOT Xe driver.
+	// TODO: List of modules should be able to get from "modinfo" for xe kmd.
+	// +optional
+	ExtraModules []string `json:"extraModules,omitempty"`
+}
+
 // ClusterPolicyStatus defines the observed state of ClusterPolicy.
 type ClusterPolicyStatus struct {
 	DevicePluginStatus string   `json:"devicePluginStatus,omitempty"`
 	DRAStatus          string   `json:"draStatus,omitempty"`
 	XPUManagerStatus   string   `json:"xpuManagerStatus,omitempty"`
+	KMMStatus          string   `json:"kmmStatus,omitempty"`
 	Errors             []string `json:"errors,omitempty"`
 }
 

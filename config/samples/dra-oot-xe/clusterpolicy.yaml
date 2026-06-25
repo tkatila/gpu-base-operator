@@ -1,0 +1,52 @@
+apiVersion: intel.com/v1alpha1
+kind: ClusterPolicy
+metadata:
+  name: gpu-dra-oot-xe-minimal
+spec:
+  resourceRegistration: dra
+  resourceMonitoring: true
+
+  driverXe:
+    enable: true
+    containerImageBase: ghcr.io/my-custom-repo/oot-xe-kmd
+    nodeSelector:
+      node.has.intel.gpu: "true"
+    kernelMappings:
+      - osTarget: rhel9.8
+---
+apiVersion: intel.com/v1alpha1
+kind: ClusterPolicy
+metadata:
+  name: gpu-dra-oot-xe-custom-kernel
+spec:
+  resourceRegistration: dra
+  resourceMonitoring: true
+
+  driverXe:
+    enable: true
+    containerImageBase: ghcr.io/my-custom-repo/oot-xe-kmd
+    nodeSelector:
+      node.has.intel.gpu: "true"
+    kernelMappings:
+      - osTarget: rhel9.8
+        build:
+          kernelRegexp: "5.14.0-687.*"
+---
+apiVersion: intel.com/v1alpha1
+kind: ClusterPolicy
+metadata:
+  name: gpu-dra-oot-xe-custom-xe-with-nfd
+spec:
+  resourceRegistration: dra
+  resourceMonitoring: true
+  useNFDLabeling: true
+
+  driverXe:
+    enable: true
+    containerImageBase: ghcr.io/my-custom-repo/oot-xe-kmd
+    kernelMappings:
+      - osTarget: rhel9.8
+        build:
+          xeTag: "v1.0.1"
+          xeSHA: "sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+

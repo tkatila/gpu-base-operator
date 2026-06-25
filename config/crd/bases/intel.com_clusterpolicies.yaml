@@ -106,6 +106,121 @@ spec:
                     description: Enable DRA Pod's health check.
                     type: boolean
                 type: object
+              driverXe:
+                description: DriverXeSpec configures out-of-tree Xe KMD deployment
+                  via the Kernel Module Management (KMM) operator.
+                properties:
+                  containerImageBase:
+                    description: |-
+                      ContainerImageBase specifies where the image is or will be located.
+                      If the image does not exist, the operator will attempt to build it and
+                      push it to the registry specified by ContainerImageBase.
+                      Operator adds a tag to differentiate between OS/kernel targets and Xe KMD versions.
+                    type: string
+                  enable:
+                    description: |-
+                      Enable creates the KMM Module CR and the accompanying resources to build the out-of-tree Xe KMD.
+                      Requires KMM operator to be pre-installed in the cluster.
+                    type: boolean
+                  imageRepoSecret:
+                    description: |-
+                      ImageRepoSecret is the name of the Secret used to pull/push module images.
+                      Needed when working with private registries. Not necessary if deployment in OCP
+                      and using ImageStream for module images.
+                    properties:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  kernelMappings:
+                    description: |-
+                      KernelMappings defines one entry per OS/kernel target.
+                      If empty, operator tries to detect the OS and kernel from the nodes via NFD.
+                    items:
+                      description: XeKernelMappingSpec defines the out-of-tree Xe
+                        KMD configuration for one OS/kernel target.
+                      properties:
+                        build:
+                          description: |-
+                            Build describes how to build the module image at cluster time via KMM.
+                            Only needed to pin a specific xe backport version, change kernel pattern etc.
+                          properties:
+                            extraModules:
+                              description: |-
+                                ExtraModules is an array of additional in-tree .ko files
+                                to copy into the module image alongside the OOT Xe driver.
+                              items:
+                                type: string
+                              type: array
+                            firmwareFiles:
+                              description: |-
+                                FirmwareFiles is an array of firmware filenames to embed.
+                                Example: [bmg_guc_70.bin, bmg_huc.bin, fan_control_8086_e20b_8086_1100.bin]
+                              items:
+                                type: string
+                              type: array
+                            inTreeModulesToRemove:
+                              description: |-
+                                InTreeModulesToRemove overrides the default list of in-tree modules that
+                                must be unloaded before loading the OOT module.
+                              items:
+                                type: string
+                              type: array
+                            kernelRegexp:
+                              description: |-
+                                KernelRegexp defines the kernel pattern targeted by this spec.
+                                Example: '6\.8\.0-[0-9]+-generic' for Ubuntu 24.04.
+                              type: string
+                            xeSHA:
+                              description: XeSHA is the expected SHA256 checksum of
+                                the source tarball for XeTag.
+                              type: string
+                            xeTag:
+                              description: |-
+                                XeTag is the xekmd-backports release tag to fetch and build from.
+                                Example: "xebr_v6.17.13.48_260409.3"
+                              type: string
+                          required:
+                          - xeSHA
+                          - xeTag
+                          type: object
+                        osTarget:
+                          description: |-
+                            OSTarget identifies the operating system this mapping applies to.
+                            The operator derives defaults for KernelRegexp, ContainerImage,
+                            module loading order, and build toolchain from this value.
+                          enum:
+                          - ubuntu24.04
+                          - ubuntu26.04
+                          - rhel9.8
+                          - rhel10.1
+                          - rhel10.2
+                          type: string
+                      required:
+                      - osTarget
+                      type: object
+                    type: array
+                  nodeSelector:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      NodeSelector defines which nodes the out-of-tree Xe KMD will be deployed to.
+                      If clusterpolicy uses useNFDLabeling, operator will deploy a rule that labels nodes and
+                      updates the nodeSelector accordingly.
+                    type: object
+                  skipTLSVerify:
+                    description: |-
+                      SkipTLSVerify disables TLS certificate verification for the image registry.
+                      Typically required for self-signed registries.
+                    type: boolean
+                type: object
               enableKueue:
                 description: Set up Kueue queues for node resources
                 type: boolean
@@ -289,6 +404,8 @@ spec:
                 items:
                   type: string
                 type: array
+              kmmStatus:
+                type: string
               xpuManagerStatus:
                 type: string
             type: object
